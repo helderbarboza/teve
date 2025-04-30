@@ -7,7 +7,13 @@
   import StandBy from './(components)/stand-by.svelte'
   import { userData } from './(data)/data'
 
-  const channels = userData.channels.filter(channel => channel.videos.length > 0)
+  const channels = userData.channels
+    .filter(channel => channel.videos.length > 0)
+
+  const allVideos = channels.flatMap(channel => (channel.videos))
+
+  channels.unshift({ name: 'Random', videos: allVideos })
+
   let playerElement: HTMLElement
   let player: YT.Player
   let osd: Osd
@@ -45,10 +51,11 @@
   let isInteracted = $state(false)
   let isPlaying = $state(false)
   let hasBegun = $state(false)
+  let isPlayerReady = $state(false)
   const channelName = $derived(currentChannel.name)
   const volumeUnits = 30
   const volumeStep = 100 / volumeUnits
-  const debugPlayback = false
+  const debugPlayback = page.url.searchParams.get('debug') === '1'
 
   const mute = () => {
     isUserMuted = true
@@ -174,7 +181,8 @@
       )
     }
     if (playAt > realtimeVideo.sectionEnd) {
-    // Handle case where playAt exceeds sectionEnd
+      // Handle case where playAt exceeds sectionEnd
+      console.error(`play at ${playAt} exceeds ${realtimeVideo.sectionEnd}, video: ${realtimeVideo.id}`)
     }
 
     console.log(`queued ${currentVideo.id}`)
@@ -262,6 +270,7 @@
       }),
       events: { onReady, onStateChange, onError },
     })
+    isPlayerReady = true
   }
 
   const userInteraction = () => {
@@ -270,12 +279,19 @@
   }
 
   let repeatingActionIntervalId: number
+  let repeatingActionTimeoutId: number
+
   const startRepeatingAction = (eventHandler: Function) => {
     eventHandler()
-    repeatingActionIntervalId = setInterval(eventHandler, 100)
+
+    repeatingActionTimeoutId = setTimeout(() => {
+      clearInterval(repeatingActionIntervalId)
+      repeatingActionIntervalId = setInterval(eventHandler, 100)
+    }, 500)
   }
 
   const stopRepeatingAction = () => {
+    clearTimeout(repeatingActionTimeoutId)
     clearInterval(repeatingActionIntervalId)
   }
 
@@ -284,13 +300,14 @@
 {#snippet control(text: string | undefined, controlName: string, eventHandler: () => void)}
   <button
     class='
-      pt-[12px] px-5 pb-[18px] transition-all duration-150 ease-in-out
+      pt-[0.6rem] px-[1.0rem] pb-[0.9rem] transition-all duration-150 ease-in-out
       rounded-full text-neutral-900/40 font-bold bg-neutral-300 text-xl
       shadow-[rgba(99,_99,_99,_0.2)_0_2px_8px_0,_inset_0px_-6px_0px_rgba(0,_0,_0,_0.1),_inset_0px_-2px_0px_rgba(0,_0,_0,_0.15)]
       hover:brightness-[1.1] active:brightness-[0.9]
       active:shadow-[rgba(99,_99,_99,_0.2)_0_2px_6px_0,_inset_0px_-1px_0px_rgba(0,_0,_0,_0.15)]
-      active:py-[15px] m-auto size-14 flex justify-center
+      active:py-[0.75rem] m-auto min-w-14 flex justify-center disabled:opacity-20 disabled:transition-opacity
     '
+    disabled={!isPlayerReady}
     data-control={controlName}
     role='button'
     {...{
@@ -303,7 +320,7 @@
     }}
   >
     {#if text}
-      <span class='text-shadow-inset'>{text}</span>
+      <span class='text-shadow-inset leading-none'>{text}</span>
     {/if}
   </button>
 {/snippet}
@@ -338,7 +355,7 @@
     {/if}
   </div>
   <div class='absolute inset-0 flex justify-center items-center pointer-events-none'>
-    <Osd bind:this={osd} volume={volume} {volumeUnits} isMuted={isPlayerMuted} {channelName} channelId={currentChannelIndex} />
+    <Osd bind:this={osd} volume={volume} {volumeUnits} isMuted={isPlayerMuted} {channelName} channelId={currentChannelIndex + 1} />
   </div>
   <div class='bottom-1/2 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
     <!-- <p>state: {playerState}</p>
