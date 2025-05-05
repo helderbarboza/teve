@@ -335,7 +335,7 @@
   ontouchstartcapture={userInteraction}
 ></svelte:document>
 
-<main class='relative size-full'>
+<main class='relative size-full bg-black text-white'>
   <!-- <div class='left-0 absolute h-svh overflow-scroll text-white'>
     {#each channels as channel}
       <dl>

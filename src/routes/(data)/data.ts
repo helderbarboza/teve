@@ -107,7 +107,6 @@ export const userData: Data = {
         { id: 'JHwKaiF6XYA', sectionStart: 0, sectionEnd: 555 },
         { id: 'mmJpaPYFamA', sectionStart: 0, sectionEnd: 555 },
         { id: '7WGaMAb-ivs', sectionStart: 0, sectionEnd: 555 },
-        { id: 'JY3yZEMJAas', sectionStart: 0, sectionEnd: 555 },
         { id: 'DWVhSWKuCvI', sectionStart: 0, sectionEnd: 555 },
         { id: 'Tl9uyOqRdJ8', sectionStart: 0, sectionEnd: 555 },
       ],

@@ -14,7 +14,8 @@
     "deploy": "npm run build && gh-pages -d build"
   },
   "dependencies": {
-    "@types/youtube": "^0.1.0"
+    "@types/youtube": "^0.1.0",
+    "vidstack": "^1.12.13"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.12.0",
