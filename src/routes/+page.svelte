@@ -235,7 +235,7 @@
         currentTime = player.getCurrentTime()
         volume = player.getVolume()
 
-        if (currentVideo && (currentTime >= currentVideo.sectionEnd || data === YT.PlayerState.ENDED)) {
+        if (currentVideo && (currentTime >= currentVideo.end || data === YT.PlayerState.ENDED)) {
           clearInterval(intervalId)
           hasBegun = false
           isPlaying = false
@@ -367,7 +367,7 @@
     {#if debugPlayback}
       <div class='text-white text-xs'>
         <div class='select-all'>{currentVideo?.id}</div>
-        <div class='select-all'>{currentVideo?.sectionStart} - {currentVideo?.sectionEnd} ({currentVideo && currentVideo?.sectionEnd - currentVideo?.sectionStart}s)</div>
+        <div class='select-all'>{currentVideo?.start} - {currentVideo?.end} ({currentVideo && currentVideo?.end - currentVideo?.start}s)</div>
         <div class='select-all'>{currentTime?.toFixed()}</div>
       </div>
     {/if}
