@@ -1,10 +1,14 @@
 <script lang='ts'>
+
+  import type { SvelteComponent } from 'svelte'
+  import type { MediaPlayerElement } from 'vidstack/elements'
   import type { Channel, Video } from './(data)/data'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import Noise from './(components)/noise.svelte'
   import Osd from './(components)/osd.svelte'
   import StandBy from './(components)/stand-by.svelte'
+  import Vidstack from './(components)/vidstack.svelte'
   import { userData } from './(data)/data'
 
   const channels = userData.channels
@@ -15,7 +19,8 @@
   channels.unshift({ name: 'Random', videos: allVideos })
 
   let playerElement: HTMLElement
-  let player: YT.Player
+  let player: Vidstack
+
   let osd: Osd
   // TODO: Use persistent state
 
@@ -346,14 +351,14 @@
       </dl>
     {/each}
   </div> -->
-  <div id='player' bind:this={playerElement}></div>
-  <div class={`inset-0 absolute ${showErrorOverlay || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
+  <Vidstack bind:this={player} />
+  <!-- <div class={`inset-0 absolute ${showErrorOverlay || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
     {#if showErrorOverlay}
       <StandBy />
     {:else if showTuningOverlay}
       <Noise />
     {/if}
-  </div>
+  </div> -->
   <div class='absolute inset-0 flex justify-center items-center pointer-events-none'>
     <Osd bind:this={osd} volume={volume} {volumeUnits} isMuted={isPlayerMuted} {channelName} channelId={currentChannelIndex + 1} />
   </div>

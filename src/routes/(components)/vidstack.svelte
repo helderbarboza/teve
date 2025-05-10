@@ -8,35 +8,54 @@
   import 'vidstack/player/styles/default/layouts/video.css'
 
   let target: HTMLDivElement
-  let player = $state<MediaPlayerElement>()
+  // let player = $state<MediaPlayerElement>()
+
+  interface Props {
+    readonly isPlaying?: boolean
+    readonly isMuted?: boolean
+    readonly player?: MediaPlayerElement
+    readonly mute?: () => void
+    readonly unmute?: () => void
+    readonly play?: () => void
+    readonly pause?: () => void
+  }
+
+  let {
+    isPlaying = $bindable(false),
+    isMuted = $bindable(true),
+    player = $bindable(),
+    ...rest
+  }: Props = $props()
 
   export function mute() {
     if (player && isYouTubeProvider(player.provider))
       player.provider.setMuted(true)
   }
+
   export function unmute() {
     if (player && isYouTubeProvider(player.provider))
       player.provider.setMuted(false)
   }
+
   export function play() {
     if (player && isYouTubeProvider(player.provider))
       player.provider.play()
   }
+
   export function pause() {
     if (player && isYouTubeProvider(player.provider))
       player.provider.pause()
   }
 
-  interface Props {
-    isPlaying: boolean
-    isMuted: boolean
+  export function setVolume(volume) {
+    if (player && isYouTubeProvider(player.provider))
+      player.provider.setVolume(volume)
   }
 
-  let {
-    isPlaying = $bindable(),
-    isMuted = $bindable(),
-
-  }: Props = $props()
+  export function getVolume() {
+    if (player && isYouTubeProvider(player.provider))
+      return player.volume * 100
+  }
 
   onMount(async () => {
     player = await VidstackPlayer.create({
@@ -83,9 +102,9 @@
 
 </script>
 
-<main class='bg-black size-full text-white'>
-  <div bind:this={target}></div>
-  <div class='flex gap-4'>
+<!-- <main class='bg-black size-full text-white'> -->
+<div bind:this={target} {...rest}></div>
+<!-- <div class='flex gap-4'>
     <button onclick={() => {
       if (player && isYouTubeProvider(player.provider))
         player.provider.setMuted(true)
@@ -102,5 +121,5 @@
       if (player && isYouTubeProvider(player.provider))
         player.provider.pause()
     }}>pause</button>
-  </div>
-</main>
+  </div> -->
+<!-- </main> -->
