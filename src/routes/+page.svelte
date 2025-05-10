@@ -129,7 +129,7 @@
   const getChannelCurrentVideo = (channel: Channel, currentTime: number = Date.now() / 1000) => {
     if (!channel.videos.length)
       throw new Error(`Channel '${channel.name}' has no videos.`)
-    const durations = channel.videos.map(video => video.sectionEnd - video.sectionStart)
+    const durations = channel.videos.map(video => video.end - video.start)
     const totalDuration = durations.reduce((acc, duration) => acc + duration, 0)
     const loopOffset = currentTime % totalDuration
     let accumulated = 0
@@ -137,7 +137,7 @@
       const duration = durations[i]
       if (loopOffset < accumulated + duration) {
         const video = channel.videos[i]
-        const playAt = video.sectionStart + (loopOffset - accumulated)
+        const playAt = video.start + (loopOffset - accumulated)
         return { video, playAt: Math.floor(playAt) }
       }
       accumulated += duration
@@ -180,9 +180,9 @@
         `Invalid playAt time (${playAt}s) exceeds video (${currentVideo.id}) duration (${duration}s)`,
       )
     }
-    if (playAt > realtimeVideo.sectionEnd) {
-      // Handle case where playAt exceeds sectionEnd
-      console.error(`play at ${playAt} exceeds ${realtimeVideo.sectionEnd}, video: ${realtimeVideo.id}`)
+    if (playAt > realtimeVideo.end) {
+      // Handle case where playAt exceeds end
+      console.error(`play at ${playAt} exceeds ${realtimeVideo.end}, video: ${realtimeVideo.id}`)
     }
 
     console.log(`queued ${currentVideo.id}`)
