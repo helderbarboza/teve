@@ -1,10 +1,8 @@
 <script lang='ts'>
-
-  import type { SvelteComponent } from 'svelte'
-  import type { MediaPlayerElement } from 'vidstack/elements'
   import type { Channel, Video } from './(data)/data'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
+  import Control from './(components)/control.svelte'
   import Noise from './(components)/noise.svelte'
   import Osd from './(components)/osd.svelte'
   import StandBy from './(components)/stand-by.svelte'
@@ -19,7 +17,7 @@
   channels.unshift({ name: 'Random', videos: allVideos })
 
   let playerElement: HTMLElement
-  let player: Vidstack
+  let mediaPlayer: Vidstack
 
   let osd: Osd
   // TODO: Use persistent state
@@ -57,6 +55,7 @@
   let isPlaying = $state(false)
   let hasBegun = $state(false)
   let isPlayerReady = $state(false)
+  let canPlay = $state(false)
   const channelName = $derived(currentChannel.name)
   const volumeUnits = 30
   const volumeStep = 100 / volumeUnits
@@ -67,27 +66,27 @@
     osd.onMute()
   }
 
-  const unMute = () => {
+  const unmute = () => {
     isUserMuted = false
     osd.onVolumeChange()
   }
 
   const toggleMute = () => {
-    isUserMuted ? unMute() : mute()
+    isUserMuted ? unmute() : mute()
   }
 
   const volumeUp = () => {
     isUserMuted = false
-    const newVolume = Math.min(player.getVolume() + volumeStep, 100)
-    player.setVolume(newVolume)
+    const newVolume = Math.min(mediaPlayer.getVolume() + volumeStep, 100)
+    mediaPlayer.setVolume(newVolume)
     volume = newVolume
     osd.onVolumeChange()
   }
 
   const volumeDown = () => {
     isUserMuted = false
-    const newVolume = Math.max(player.getVolume() - volumeStep, 0)
-    player.setVolume(newVolume)
+    const newVolume = Math.max(mediaPlayer.getVolume() - volumeStep, 0)
+    mediaPlayer.setVolume(newVolume)
     volume = newVolume
     osd.onVolumeChange()
   }
@@ -96,7 +95,7 @@
     const action = () => {
       showTuningOverlay = false
       if (!isUserMuted && isInteracted) {
-        player.unMute()
+        mediaPlayer.unmute()
         isPlayerMuted = false
       }
     }
@@ -114,13 +113,13 @@
 
   const enableTuning = () => {
     showTuningOverlay = true
-    player.mute()
+    mediaPlayer.mute()
     tuningIntervalId && clearInterval(tuningIntervalId)
   }
 
   $effect(() => {
     if (isInteracted && isPlaying) {
-      isUserMuted ? player.mute() : player.unMute()
+      isUserMuted ? mediaPlayer.mute() : mediaPlayer.unmute()
       isPlayerMuted = isUserMuted
     }
   })
@@ -154,7 +153,8 @@
   const loadChannelCurrentVideo = async (channel: Channel) => {
     enableTuning()
     const { video: realtimeVideo, playAt } = getChannelCurrentVideo(channel)
-    player.cueVideoById(realtimeVideo.id, playAt)
+    mediaPlayer.playVideoAt(realtimeVideo.id, playAt)
+
     currentVideo = realtimeVideo
 
     await ((timeout = 3000): Promise<void> => {
@@ -162,7 +162,7 @@
         const start = Date.now()
 
         const check = () => {
-          const duration = player.getDuration()
+          const duration = mediaPlayer.getDuration()
           if (duration > 0) {
             resolve()
           }
@@ -178,7 +178,7 @@
       })
     })()
 
-    const duration = player.getDuration()
+    const duration = mediaPlayer.getDuration()
 
     if (playAt > duration) {
       throw new Error(
@@ -201,7 +201,7 @@
   }
 
   const onReady: YT.Events['onReady'] = () => {
-    volume = player.getVolume()
+    volume = mediaPlayer.getVolume()
 
     loadChannelCurrentVideo(currentChannel)
   }
@@ -237,8 +237,8 @@
       }
 
       const intervalId = setInterval(async () => {
-        currentTime = player.getCurrentTime()
-        volume = player.getVolume()
+        currentTime = mediaPlayer.getCurrentTime()
+        volume = mediaPlayer.getVolume()
 
         if (currentVideo && (currentTime >= currentVideo.end || data === YT.PlayerState.ENDED)) {
           clearInterval(intervalId)
@@ -249,8 +249,8 @@
       }, 1_000)
     }
     else if (data === YT.PlayerState.CUED || data === YT.PlayerState.UNSTARTED) {
-      player.playVideo()
-      console.log(player.videoTitle)
+      mediaPlayer.playVideo()
+      console.log(mediaPlayer.videoTitle)
       showErrorOverlay = false
       isPlaying = false
     }
@@ -260,79 +260,30 @@
     }
   }
 
-  window.onYouTubeIframeAPIReady = () => {
-    player = new YT.Player(playerElement, {
-      width: '100%',
-      height: '100%',
-      playerVars: ({
-        autoplay: 1,
-        controls: 1,
-        disablekb: 1,
-        enablejsapi: 1,
-        fs: 0,
-        iv_load_policy: 3,
-        rel: 0,
-      }),
-      events: { onReady, onStateChange, onError },
-    })
-    isPlayerReady = true
-  }
+  // window.onYouTubeIframeAPIReady = () => {
+  //   player = new YT.Player(playerElement, {
+  //     width: '100%',
+  //     height: '100%',
+  //     playerVars: ({
+  //       autoplay: 1,
+  //       controls: 1,
+  //       disablekb: 1,
+  //       enablejsapi: 1,
+  //       fs: 0,
+  //       iv_load_policy: 3,
+  //       rel: 0,
+  //     }),
+  //     events: { onReady, onStateChange, onError },
+  //   })
+  //   isPlayerReady = true
+  // }
 
   const userInteraction = () => {
     if (!isInteracted)
       isInteracted = true
   }
 
-  let repeatingActionIntervalId: number
-  let repeatingActionTimeoutId: number
-
-  const startRepeatingAction = (eventHandler: Function) => {
-    eventHandler()
-
-    repeatingActionTimeoutId = setTimeout(() => {
-      clearInterval(repeatingActionIntervalId)
-      repeatingActionIntervalId = setInterval(eventHandler, 100)
-    }, 500)
-  }
-
-  const stopRepeatingAction = () => {
-    clearTimeout(repeatingActionTimeoutId)
-    clearInterval(repeatingActionIntervalId)
-  }
-
 </script>
-
-{#snippet control(text: string | undefined, controlName: string, eventHandler: () => void)}
-  <button
-    class='
-      pt-[0.6rem] px-[1.0rem] pb-[0.9rem] transition-all duration-150 ease-in-out
-      rounded-full text-neutral-900/40 font-bold bg-neutral-300 text-xl
-      shadow-[rgba(99,_99,_99,_0.2)_0_2px_8px_0,_inset_0px_-6px_0px_rgba(0,_0,_0,_0.1),_inset_0px_-2px_0px_rgba(0,_0,_0,_0.15)]
-      hover:brightness-[1.1] active:brightness-[0.9]
-      active:shadow-[rgba(99,_99,_99,_0.2)_0_2px_6px_0,_inset_0px_-1px_0px_rgba(0,_0,_0,_0.15)]
-      active:py-[0.75rem] m-auto min-w-14 flex justify-center disabled:opacity-20 disabled:transition-opacity
-    '
-    disabled={!isPlayerReady}
-    data-control={controlName}
-    role='button'
-    {...{
-      onmousedown: () => startRepeatingAction(eventHandler),
-      ontouchstart: () => startRepeatingAction(eventHandler),
-      onmouseup: () => stopRepeatingAction(),
-      onmouseleave: () => stopRepeatingAction(),
-      ontouchend: () => stopRepeatingAction(),
-      ontouchcancel: () => stopRepeatingAction(),
-    }}
-  >
-    {#if text}
-      <span class='text-shadow-inset leading-none'>{text}</span>
-    {/if}
-  </button>
-{/snippet}
-
-<svelte:head>
-  <script src='https://www.youtube.com/iframe_api'></script>
-</svelte:head>
 
 <svelte:document
   onclickcapture={userInteraction}
@@ -340,7 +291,7 @@
   ontouchstartcapture={userInteraction}
 ></svelte:document>
 
-<main class='relative size-full bg-black text-white'>
+<main class='relative size-full bg-black text-white overflow-hidden'>
   <!-- <div class='left-0 absolute h-svh overflow-scroll text-white'>
     {#each channels as channel}
       <dl>
@@ -351,7 +302,7 @@
       </dl>
     {/each}
   </div> -->
-  <Vidstack bind:this={player} />
+  <Vidstack bind:this={mediaPlayer} {canPlay} />
   <!-- <div class={`inset-0 absolute ${showErrorOverlay || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
     {#if showErrorOverlay}
       <StandBy />
@@ -378,20 +329,20 @@
     {/if}
     <div>
       <div class='text-xs mb-1'>MUTING</div>
-      {@render control(undefined, 'mute', () => { toggleMute() })}
+      <Control isPlayerReady={canPlay} controlName='mute' handler={() => { toggleMute() }}></Control>
     </div>
     <div>
       <div class='text-xs mb-1'>VOL</div>
       <div class='space-y-1'>
-        {@render control('➕', 'vol-up', () => { volumeUp() })}
-        {@render control('➖', 'vol-down', () => { volumeDown() })}
+        <Control isPlayerReady={canPlay} controlName='vol-up' handler={() => { volumeUp() }}>➕</Control>
+        <Control isPlayerReady={canPlay} controlName='vol-down' handler={() => { volumeDown() }}>➖</Control>
       </div>
     </div>
     <div>
       <div class='text-xs mb-1'>CH</div>
       <div class='space-y-1'>
-        {@render control('➕', 'next-channel', () => { setChannelByOffset(1) })}
-        {@render control('➖', 'prev-channel', () => { setChannelByOffset(-1) })}
+        <Control isPlayerReady={canPlay} controlName='next-channel' handler={() => { setChannelByOffset(1) }}>➕</Control>
+        <Control isPlayerReady={canPlay} controlName='prev-channel' handler={() => { setChannelByOffset(-1) }}>➖</Control>
       </div>
     </div>
   </div>
