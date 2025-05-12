@@ -7,7 +7,9 @@
   import 'vidstack/player/styles/default/layouts/audio.css'
   import 'vidstack/player/styles/default/layouts/video.css'
 
+  const noop = function () {}
   let target: HTMLDivElement
+
   // let player = $state<MediaPlayerElement>()
 
   interface Props {
@@ -15,6 +17,9 @@
     readonly isPlaying?: boolean
     readonly isMuted?: boolean
     readonly canPlay?: boolean
+    readonly isPlayerReady?: boolean
+    onReady?: (player: MediaPlayerElement) => void
+    videoId: string
   }
 
   let {
@@ -22,8 +27,18 @@
     isPlaying = $bindable(false),
     isMuted = $bindable(true),
     canPlay = $bindable(false),
+    isPlayerReady = $bindable(false),
+    videoId = $bindable(),
+    onReady = noop,
     ...rest
   }: Props = $props()
+
+  let src = $state<string>()
+
+  $effect.pre(() => {
+    src = `youtube/${videoId}`
+  })
+  console.log(src)
 
   export function mute() {
     if (!(player && isYouTubeProvider(player.provider)))
@@ -84,7 +99,7 @@
   onMount(async () => {
     player = await VidstackPlayer.create({
       target,
-      src: 'youtube/UeoBikpUIwg',
+      src,
       load: 'eager',
       viewType: 'video',
       streamType: 'on-demand',
@@ -96,6 +111,9 @@
       autoplay: true,
       preload: 'auto',
     })
+    onReady(player)
+
+    isPlayerReady = true
 
     player.className = 'size-full'
 

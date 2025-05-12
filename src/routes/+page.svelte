@@ -12,25 +12,15 @@
   const channels = userData.channels
     .filter(channel => channel.videos.length > 0)
 
-  const allVideos = channels.flatMap(channel => (channel.videos))
+  channels.unshift({ name: 'Random', videos: channels.flatMap(channel => (channel.videos)) })
 
-  channels.unshift({ name: 'Random', videos: allVideos })
-
-  let playerElement: HTMLElement
-  let mediaPlayer: Vidstack
-
+  let player: Vidstack
   let osd: Osd
-  // TODO: Use persistent state
-
-  // User states
   let isUserMuted = $state(true)
-
-  // Player states
   let isPlayerMuted = $state(true)
-
   let volume = $state(100)
 
-  const getCurrentChannelFromParams = () => {
+  const getChannelFromParams = (channels: Channel[]) => {
     const value = page.url.searchParams.get('channel')
 
     if (!value)
@@ -44,18 +34,18 @@
     return channelIndex
   }
 
-  let currentChannelIndex = $state(getCurrentChannelFromParams())
+  let currentChannelIndex = $state(getChannelFromParams(channels))
   const currentChannel = $derived<Channel>(channels.at(currentChannelIndex)!)
-  let currentVideo = $state<Video>()
+
+  let currentVideo = $state<Video>((() => {
+    const { video } = getChannelCurrentVideo(currentChannel)
+    return video
+  })())
   let currentTime = $state<number>()
-  let tuningIntervalId: number
-  let showTuningOverlay = $state(true)
-  let showErrorOverlay = $state(false)
   let isInteracted = $state(false)
   let isPlaying = $state(false)
   let hasBegun = $state(false)
   let isPlayerReady = $state(false)
-  let canPlay = $state(false)
   const channelName = $derived(currentChannel.name)
   const volumeUnits = 30
   const volumeStep = 100 / volumeUnits
@@ -77,16 +67,16 @@
 
   const volumeUp = () => {
     isUserMuted = false
-    const newVolume = Math.min(mediaPlayer.getVolume() + volumeStep, 100)
-    mediaPlayer.setVolume(newVolume)
+    const newVolume = Math.min(player.getVolume() + volumeStep, 100)
+    player.setVolume(newVolume)
     volume = newVolume
     osd.onVolumeChange()
   }
 
   const volumeDown = () => {
     isUserMuted = false
-    const newVolume = Math.max(mediaPlayer.getVolume() - volumeStep, 0)
-    mediaPlayer.setVolume(newVolume)
+    const newVolume = Math.max(player.getVolume() - volumeStep, 0)
+    player.setVolume(newVolume)
     volume = newVolume
     osd.onVolumeChange()
   }
@@ -95,7 +85,7 @@
     const action = () => {
       showTuningOverlay = false
       if (!isUserMuted && isInteracted) {
-        mediaPlayer.unmute()
+        player.unmute()
         isPlayerMuted = false
       }
     }
@@ -111,26 +101,20 @@
     }
   }
 
-  const enableTuning = () => {
-    showTuningOverlay = true
-    mediaPlayer.mute()
-    tuningIntervalId && clearInterval(tuningIntervalId)
-  }
-
   $effect(() => {
     if (isInteracted && isPlaying) {
-      isUserMuted ? mediaPlayer.mute() : mediaPlayer.unmute()
+      isUserMuted ? player.mute() : player.unmute()
       isPlayerMuted = isUserMuted
     }
   })
 
-  $effect(() => {
+  $effect.pre(() => {
     const searchParams = new URLSearchParams()
     searchParams.set('channel', currentChannel.name)
     goto(`?${searchParams.toString()}`)
   })
 
-  const getChannelCurrentVideo = (channel: Channel, currentTime: number = Date.now() / 1000) => {
+  function getChannelCurrentVideo(channel: Channel, currentTime: number = Date.now() / 1000) {
     if (!channel.videos.length)
       throw new Error(`Channel '${channel.name}' has no videos.`)
     const durations = channel.videos.map(video => video.end - video.start)
@@ -150,135 +134,11 @@
     throw new Error(`Failed to determine current video for channel '${channel.name}'. Total duration: ${totalDuration}, loopOffset: ${loopOffset}`)
   }
 
-  const loadChannelCurrentVideo = async (channel: Channel) => {
-    enableTuning()
-    const { video: realtimeVideo, playAt } = getChannelCurrentVideo(channel)
-    mediaPlayer.playVideoAt(realtimeVideo.id, playAt)
+  $effect.pre(() => {
+    const { video: { id: videoId }, playAt } = getChannelCurrentVideo(currentChannel)
+  })
 
-    currentVideo = realtimeVideo
-
-    await ((timeout = 3000): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        const start = Date.now()
-
-        const check = () => {
-          const duration = mediaPlayer.getDuration()
-          if (duration > 0) {
-            resolve()
-          }
-          else if (Date.now() - start > timeout) {
-            reject(new Error('Timed out waiting for video duration'))
-          }
-          else {
-            requestAnimationFrame(check)
-          }
-        }
-
-        check()
-      })
-    })()
-
-    const duration = mediaPlayer.getDuration()
-
-    if (playAt > duration) {
-      throw new Error(
-        `Invalid playAt time (${playAt}s) exceeds video (${currentVideo.id}) duration (${duration}s)`,
-      )
-    }
-    if (playAt > realtimeVideo.end) {
-      // Handle case where playAt exceeds end
-      console.error(`play at ${playAt} exceeds ${realtimeVideo.end}, video: ${realtimeVideo.id}`)
-    }
-
-    console.log(`queued ${currentVideo.id}`)
-  }
-
-  const setChannelByOffset = (offset: number) => {
-    currentChannelIndex = ((currentChannelIndex + offset) % channels.length + channels.length) % channels.length
-
-    loadChannelCurrentVideo(currentChannel)
-    osd.onChannelChange()
-  }
-
-  const onReady: YT.Events['onReady'] = () => {
-    volume = mediaPlayer.getVolume()
-
-    loadChannelCurrentVideo(currentChannel)
-  }
-
-  const onError: YT.Events['onError'] = ({ data }: { data: YT.PlayerError }) => {
-    console.error(data)
-
-    if ([101, 150, 100].includes(data)) {
-      showErrorOverlay = true
-      const timeout = 5000
-      console.info(`Player error ${data}, retrying in ${timeout}ms.`)
-      setTimeout(() => {
-        loadChannelCurrentVideo(currentChannel)
-      }, timeout)
-    }
-  }
-
-  const onStateChange: YT.Events['onStateChange'] = ({ data }) => {
-    console.log({
-      [-1]: 'UNSTARTED',
-      0: 'ENDED',
-      1: 'PLAYING',
-      2: 'PAUSED',
-      3: 'BUFFERING',
-      5: 'CUED',
-    }[data], currentVideo?.id)
-
-    if (currentVideo && (data === YT.PlayerState.PLAYING || data === YT.PlayerState.ENDED)) {
-      disableTuning()
-      if (data === YT.PlayerState.PLAYING) {
-        hasBegun = true
-        isPlaying = true
-      }
-
-      const intervalId = setInterval(async () => {
-        currentTime = mediaPlayer.getCurrentTime()
-        volume = mediaPlayer.getVolume()
-
-        if (currentVideo && (currentTime >= currentVideo.end || data === YT.PlayerState.ENDED)) {
-          clearInterval(intervalId)
-          hasBegun = false
-          isPlaying = false
-          loadChannelCurrentVideo(currentChannel)
-        }
-      }, 1_000)
-    }
-    else if (data === YT.PlayerState.CUED || data === YT.PlayerState.UNSTARTED) {
-      mediaPlayer.playVideo()
-      console.log(mediaPlayer.videoTitle)
-      showErrorOverlay = false
-      isPlaying = false
-    }
-    else if (data === YT.PlayerState.PAUSED) {
-      isPlaying = false
-      enableTuning()
-    }
-  }
-
-  // window.onYouTubeIframeAPIReady = () => {
-  //   player = new YT.Player(playerElement, {
-  //     width: '100%',
-  //     height: '100%',
-  //     playerVars: ({
-  //       autoplay: 1,
-  //       controls: 1,
-  //       disablekb: 1,
-  //       enablejsapi: 1,
-  //       fs: 0,
-  //       iv_load_policy: 3,
-  //       rel: 0,
-  //     }),
-  //     events: { onReady, onStateChange, onError },
-  //   })
-  //   isPlayerReady = true
-  // }
-
-  const userInteraction = () => {
+  const userInteracted = () => {
     if (!isInteracted)
       isInteracted = true
   }
@@ -286,9 +146,9 @@
 </script>
 
 <svelte:document
-  onclickcapture={userInteraction}
-  onkeydowncapture={userInteraction}
-  ontouchstartcapture={userInteraction}
+  onclickcapture={userInteracted}
+  onkeydowncapture={userInteracted}
+  ontouchstartcapture={userInteracted}
 ></svelte:document>
 
 <main class='relative size-full bg-black text-white overflow-hidden'>
@@ -302,7 +162,11 @@
       </dl>
     {/each}
   </div> -->
-  <Vidstack bind:this={mediaPlayer} {canPlay} />
+  <Vidstack
+    bind:this={player}
+    bind:isPlayerReady
+    videoId={currentVideo.id}
+  />
   <!-- <div class={`inset-0 absolute ${showErrorOverlay || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
     {#if showErrorOverlay}
       <StandBy />
@@ -311,7 +175,14 @@
     {/if}
   </div> -->
   <div class='absolute inset-0 flex justify-center items-center pointer-events-none'>
-    <Osd bind:this={osd} volume={volume} {volumeUnits} isMuted={isPlayerMuted} {channelName} channelId={currentChannelIndex + 1} />
+    <Osd
+      bind:this={osd}
+      volume={volume}
+      {volumeUnits}
+      isMuted={isPlayerMuted}
+      {channelName}
+      channelId={currentChannelIndex + 1}
+    />
   </div>
   <div class='bottom-1/2 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
     <!-- <p>state: {playerState}</p>
@@ -329,20 +200,20 @@
     {/if}
     <div>
       <div class='text-xs mb-1'>MUTING</div>
-      <Control isPlayerReady={canPlay} controlName='mute' handler={() => { toggleMute() }}></Control>
+      <Control {isPlayerReady} controlName='mute' handler={() => { toggleMute() }}></Control>
     </div>
     <div>
       <div class='text-xs mb-1'>VOL</div>
       <div class='space-y-1'>
-        <Control isPlayerReady={canPlay} controlName='vol-up' handler={() => { volumeUp() }}>➕</Control>
-        <Control isPlayerReady={canPlay} controlName='vol-down' handler={() => { volumeDown() }}>➖</Control>
+        <Control {isPlayerReady} controlName='vol-up' handler={() => { volumeUp() }}>➕</Control>
+        <Control {isPlayerReady} controlName='vol-down' handler={() => { volumeDown() }}>➖</Control>
       </div>
     </div>
     <div>
       <div class='text-xs mb-1'>CH</div>
       <div class='space-y-1'>
-        <Control isPlayerReady={canPlay} controlName='next-channel' handler={() => { setChannelByOffset(1) }}>➕</Control>
-        <Control isPlayerReady={canPlay} controlName='prev-channel' handler={() => { setChannelByOffset(-1) }}>➖</Control>
+        <Control {isPlayerReady} controlName='next-channel' handler={() => { setChannelByOffset(1) }}>➕</Control>
+        <Control {isPlayerReady} controlName='prev-channel' handler={() => { setChannelByOffset(-1) }}>➖</Control>
       </div>
     </div>
   </div>
