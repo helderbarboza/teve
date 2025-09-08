@@ -8,12 +8,9 @@
   import 'vidstack/bundle'
 
   const remote = new MediaRemoteControl()
-  let wcplayer = $state<MediaPlayerElement>()
+  let playerEl = $state<MediaPlayerElement>()
 
   const noop = function () {}
-  // let target: HTMLDivElement
-
-  // let player = $state<MediaPlayerElement>()
 
   interface Props extends Partial<MediaPlayerProps> {
     readonly player?: MediaPlayerElement
@@ -21,6 +18,7 @@
     readonly isMuted?: boolean
     readonly canPlay?: boolean
     readonly isPlayerReady?: boolean
+    volume: number
     onReady?: (player: MediaPlayerElement) => void
     onEnded?: (this: HTMLElement, ev: MediaEndedEvent) => any
   }
@@ -28,114 +26,104 @@
   // type Props = CustomProps & Partial<MediaPlayerProps>
 
   let {
-    // player = $bindable(),
+    player = $bindable(),
     isPlaying = $bindable(false),
     isMuted = $bindable(true),
     canPlay = $bindable(false),
     isPlayerReady = $bindable(false),
+    volume = $bindable(1),
     onReady = noop,
     onEnded = noop,
     ...rest
   }: Props = $props()
 
   $effect(() => {
-    if (rest.src && player)
+    if (rest.src && playerEl)
       playVideoAt(rest.src, 0)
   })
 
-  let src = $state<string>()
-
   export function mute() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    player.provider.setMuted(true)
+    playerEl.provider.setMuted(true)
   }
 
   export function unmute() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    player.provider.setMuted(false)
+    playerEl.provider.setMuted(false)
   }
 
   export function play() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    player.provider.play()
+    playerEl.provider.play()
   }
 
   export function pause() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    player.provider.pause()
+    playerEl.provider.pause()
   }
 
   export function setVolume(value: number) {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    player.provider.setVolume(value)
+    playerEl.provider.setVolume(value)
     volume = value
   }
 
   export function getVolume() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
-    return player.volume
+    return playerEl.volume
   }
 
   export function playVideoAt(videoId: PlayerSrc, currentTime: number) {
-    if (!(player))
+    if (!(playerEl))
       throw new Error('player is undefined')
 
-    player.src = `youtube/${videoId}`
-    player.currentTime = currentTime
+    playerEl.src = `youtube/${videoId}`
+    playerEl.currentTime = currentTime
   }
 
   export function getDuration() {
-    if (!(player && isYouTubeProvider(player.provider)))
+    if (!(playerEl && isYouTubeProvider(playerEl.provider)))
       throw new Error('player is undefined')
 
-    return player.duration
+    return playerEl.duration
   }
 
   onMount(async () => {
-    player = await VidstackPlayer.create({
-      target: '#player-parent',
-      src,
-      load: 'eager',
-      viewType: 'video',
-      streamType: 'on-demand',
-      // logLevel: 'debug',
-      crossOrigin: true,
-      playsInline: true,
-      controls: false,
-      muted: true,
-      autoplay: true,
-      preload: 'auto',
-    })
-    onReady(player)
+    if (playerEl === undefined)
+      throw new Error('Player is undefined')
+
+    player = playerEl
 
     isPlayerReady = true
 
-    player.className = 'size-full'
-
     player.addEventListener('provider-change', async (event) => {
+      console.info('provider-change')
       const provider = event.detail
       if (isYouTubeProvider(provider))
         provider.cookies = false
     })
 
     player.addEventListener('auto-play', () => {
+      console.info('auto-play')
       if (player && isYouTubeProvider(player.provider))
         player.provider?.setMuted(true)
     })
 
     player.addEventListener('playing', () => {
-      player!.provider?.setVolume(volume)
+      console.info('playing')
+      // player!.provider?.setVolume(volume)
+      player?.volume = volume
 
       setTimeout(() => {
         isPlaying = true
@@ -143,10 +131,13 @@
     })
 
     player.addEventListener('pause', () => {
+      console.info('pause')
       isPlaying = false
     })
 
     player.addEventListener('can-play', () => {
+      console.info('can-play')
+      player!.play()
       canPlay = true
     })
 
@@ -176,6 +167,32 @@
   </div> -->
 <!-- </div> -->
 
-<media-player bind:this={wcplayer} {...rest}>
+<media-player
+  bind:this={playerEl}
+  class='size-full'
+  autoplay
+  viewType='video'
+  load='eager'
+  streamType='on-demand'
+  crossOrigin
+  playsInline
+  controls={false}
+  muted
+  preload='auto'
+  logLevel='info'
+  {...rest}
+>
+  <!-- //   target: '#player-parent',
+    //   src,
+    //   load: 'eager',
+    //   viewType: 'video',
+    //   streamType: 'on-demand',
+    //   // logLevel: 'debug',
+    //   crossOrigin: true,
+    //   playsInline: true,
+    //   controls: false,
+    //   muted: true,
+    //   autoplay: true,
+    //   preload: 'auto', -->
   <media-provider></media-provider>
 </media-player>

@@ -82,6 +82,7 @@
 
   const volumeUp = () => {
     isUserMuted = false
+    // volume = Math.min(volume ))
     const newVolume = Math.min((player.getVolume() * 100) + volumeStep, 100)
     player.setVolume(newVolume / 100)
     volume = newVolume
@@ -194,18 +195,19 @@
     bind:this={player}
     bind:isPlayerReady
     bind:isPlaying
+    bind:volume={volume}
     onEnded={() => { alert('done!') }}
   />
 
   <!-- https://svelte.dev/docs/svelte/key -->
-  <div class={`inset-0 absolute ${channelWithNoVideos || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
+  <div id='no-video-wrapper' class={`inset-0 absolute ${channelWithNoVideos || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
     {#if channelWithNoVideos}
       <StandBy status='NO_VIDEOS' />
     {:else if showTuningOverlay}
       <Noise />
     {/if}
   </div>
-  <div class='absolute inset-0 flex justify-center items-center pointer-events-none'>
+  <div id='osd-wrapper' class='absolute inset-0 flex justify-center items-center pointer-events-none'>
     <Osd
       bind:this={osd}
       volume={volume}
@@ -215,7 +217,7 @@
       channelId={currentChannelIndex + 1}
     />
   </div>
-  <div class='bottom-1/2 z-10 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
+  <div id='controls-wrapper' class='bottom-1/2 z-10 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
     <!-- <p>state: {playerState}</p>
     <p>{currentChannel.name} ({currentChannel.videos.length})</p>
     <p>#{currentVideo ? currentChannel.videos.indexOf(currentVideo) : null} {currentVideo?.id}</p>
