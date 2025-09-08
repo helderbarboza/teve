@@ -1,44 +1,49 @@
 <script lang='ts'>
+  import type { MediaEndedEvent, MediaPlayer, MediaPlayerProps, PlayerSrc } from 'vidstack'
   import type { MediaPlayerElement } from 'vidstack/elements'
+  import type { MediaPlayerAttributes } from 'vidstack/svelte'
   import { onMount } from 'svelte'
-  import { isYouTubeProvider } from 'vidstack'
+  import { isYouTubeProvider, MediaRemoteControl } from 'vidstack'
   import { VidstackPlayer } from 'vidstack/global/player'
-  import 'vidstack/player/styles/default/theme.css'
-  import 'vidstack/player/styles/default/layouts/audio.css'
-  import 'vidstack/player/styles/default/layouts/video.css'
+  import 'vidstack/bundle'
+
+  const remote = new MediaRemoteControl()
+  let wcplayer = $state<MediaPlayerElement>()
 
   const noop = function () {}
-  let target: HTMLDivElement
+  // let target: HTMLDivElement
 
   // let player = $state<MediaPlayerElement>()
 
-  interface Props {
+  interface Props extends Partial<MediaPlayerProps> {
     readonly player?: MediaPlayerElement
     readonly isPlaying?: boolean
     readonly isMuted?: boolean
     readonly canPlay?: boolean
     readonly isPlayerReady?: boolean
     onReady?: (player: MediaPlayerElement) => void
-    videoId: string
+    onEnded?: (this: HTMLElement, ev: MediaEndedEvent) => any
   }
 
+  // type Props = CustomProps & Partial<MediaPlayerProps>
+
   let {
-    player = $bindable(),
+    // player = $bindable(),
     isPlaying = $bindable(false),
     isMuted = $bindable(true),
     canPlay = $bindable(false),
     isPlayerReady = $bindable(false),
-    videoId = $bindable(),
     onReady = noop,
+    onEnded = noop,
     ...rest
   }: Props = $props()
 
-  let src = $state<string>()
-
-  $effect.pre(() => {
-    src = `youtube/${videoId}`
+  $effect(() => {
+    if (rest.src && player)
+      playVideoAt(rest.src, 0)
   })
-  console.log(src)
+
+  let src = $state<string>()
 
   export function mute() {
     if (!(player && isYouTubeProvider(player.provider)))
@@ -68,21 +73,22 @@
     player.provider.pause()
   }
 
-  export function setVolume(volume: number) {
+  export function setVolume(value: number) {
     if (!(player && isYouTubeProvider(player.provider)))
       throw new Error('player is undefined')
 
-    player.provider.setVolume(volume)
+    player.provider.setVolume(value)
+    volume = value
   }
 
   export function getVolume() {
     if (!(player && isYouTubeProvider(player.provider)))
       throw new Error('player is undefined')
-    return player.volume * 100
+    return player.volume
   }
 
-  export function playVideoAt(videoId: string, currentTime: number) {
-    if (!(player && isYouTubeProvider(player.provider)))
+  export function playVideoAt(videoId: PlayerSrc, currentTime: number) {
+    if (!(player))
       throw new Error('player is undefined')
 
     player.src = `youtube/${videoId}`
@@ -98,12 +104,12 @@
 
   onMount(async () => {
     player = await VidstackPlayer.create({
-      target,
+      target: '#player-parent',
       src,
       load: 'eager',
       viewType: 'video',
       streamType: 'on-demand',
-      logLevel: 'debug',
+      // logLevel: 'debug',
       crossOrigin: true,
       playsInline: true,
       controls: false,
@@ -129,9 +135,11 @@
     })
 
     player.addEventListener('playing', () => {
+      player!.provider?.setVolume(volume)
+
       setTimeout(() => {
         isPlaying = true
-      }, 300)
+      }, 350)
     })
 
     player.addEventListener('pause', () => {
@@ -141,12 +149,14 @@
     player.addEventListener('can-play', () => {
       canPlay = true
     })
+
+    player.addEventListener('ended', onEnded)
   })
 
 </script>
 
-<div bind:this={target} {...rest} class='size-full'>
-  <!-- <div class='flex gap-4'>
+<!-- <div bind:this={target} {...rest} class='size-full' id='player-parent'> -->
+<!-- <div class='flex gap-4'>
     <button onclick={() => {
       if (player && isYouTubeProvider(player.provider))
         player.provider.setMuted(true)
@@ -164,4 +174,8 @@
         player.provider.pause()
     }}>pause</button>
   </div> -->
-</div>
+<!-- </div> -->
+
+<media-player bind:this={wcplayer} {...rest}>
+  <media-provider></media-provider>
+</media-player>

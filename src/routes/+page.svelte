@@ -9,41 +9,56 @@
   import Vidstack from './(components)/vidstack.svelte'
   import { userData } from './(data)/data'
 
-  const channels = userData.channels
-    .filter(channel => channel.videos.length > 0)
-
-  channels.unshift({ name: 'Random', videos: channels.flatMap(channel => (channel.videos)) })
-
   let player: Vidstack
   let osd: Osd
   let isUserMuted = $state(true)
   let isPlayerMuted = $state(true)
   let volume = $state(100)
 
-  const getChannelFromParams = (channels: Channel[]) => {
-    const value = page.url.searchParams.get('channel')
+  // Take only channels that has videos
+  const channels = userData.channels.filter(channel => channel.videos.length > 0)
 
+  // Adds a Random channel as the first one
+  channels.unshift({ name: 'Random', videos: channels.flatMap(channel => (channel.videos)) })
+
+  const getChannelIndexFromParams = (channels: Channel[]) => {
+    const value = page.url.searchParams.get('channel')
     if (!value)
-      return 0
+      return
 
     const channelIndex = channels.findIndex(channel => channel.name === value)
-
     if (channelIndex < 0)
-      return 0
+      return
 
     return channelIndex
   }
 
-  let currentChannelIndex = $state(getChannelFromParams(channels))
-  const currentChannel = $derived<Channel>(channels.at(currentChannelIndex)!)
+  // Channel
 
-  let currentVideo = $state<Video>((() => {
-    const { video } = getChannelCurrentVideo(currentChannel)
-    return video
-  })())
+  let currentChannelIndex = $state(getChannelIndexFromParams(channels) || 0)
+  let currentChannel = $derived<Channel>(channels[currentChannelIndex])
+
+  // Video
+
+  const getCurrentVideoIndex = () => {
+    const { video: scheduledVideo } = getChannelCurrentVideo(currentChannel)
+    return currentChannel.videos.findIndex(video => video.id === scheduledVideo.id)
+  }
+
+  let currentVideoIndex = $state(getCurrentVideoIndex())
+  const setCurrentVideoIndex = () => {
+    currentVideoIndex = getCurrentVideoIndex()
+  }
+
+  let currentVideo = $derived<Video | undefined>(currentChannel.videos[currentVideoIndex])
+  let currentVideoId = $derived<Video['id'] | undefined>(currentVideo?.id)
+
+  let channelWithNoVideos = $derived(currentChannel.videos.length === 0)
+
   let currentTime = $state<number>()
   let isInteracted = $state(false)
   let isPlaying = $state(false)
+  let showTuningOverlay = $derived(!isPlaying) // FIXME
   let hasBegun = $state(false)
   let isPlayerReady = $state(false)
   const channelName = $derived(currentChannel.name)
@@ -67,18 +82,27 @@
 
   const volumeUp = () => {
     isUserMuted = false
-    const newVolume = Math.min(player.getVolume() + volumeStep, 100)
-    player.setVolume(newVolume)
+    const newVolume = Math.min((player.getVolume() * 100) + volumeStep, 100)
+    player.setVolume(newVolume / 100)
     volume = newVolume
     osd.onVolumeChange()
   }
 
   const volumeDown = () => {
     isUserMuted = false
-    const newVolume = Math.max(player.getVolume() - volumeStep, 0)
-    player.setVolume(newVolume)
+    const newVolume = Math.max((player.getVolume() * 100) - volumeStep, 0)
+    console.log(newVolume)
+    player.setVolume(newVolume / 100)
     volume = newVolume
     osd.onVolumeChange()
+  }
+
+  const goToPrevChannel = () => {
+    currentChannelIndex = currentChannelIndex === 0 ? channels.length - 1 : currentChannelIndex - 1
+  }
+
+  const goToNextChannel = () => {
+    currentChannelIndex = currentChannelIndex === channels.length - 1 ? 0 : currentChannelIndex + 1
   }
 
   const disableTuning = () => {
@@ -109,9 +133,11 @@
   })
 
   $effect.pre(() => {
-    const searchParams = new URLSearchParams()
+    const searchParams = new URLSearchParams(page.url.searchParams)
     searchParams.set('channel', currentChannel.name)
-    goto(`?${searchParams.toString()}`)
+
+    if (searchParams.toString() !== page.url.searchParams.toString())
+      goto(`?${searchParams.toString()}`)
   })
 
   function getChannelCurrentVideo(channel: Channel, currentTime: number = Date.now() / 1000) {
@@ -162,18 +188,23 @@
       </dl>
     {/each}
   </div> -->
+
   <Vidstack
+    src={`youtube/${currentVideoId}`}
     bind:this={player}
     bind:isPlayerReady
-    videoId={currentVideo.id}
+    bind:isPlaying
+    onEnded={() => { alert('done!') }}
   />
-  <!-- <div class={`inset-0 absolute ${showErrorOverlay || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
-    {#if showErrorOverlay}
-      <StandBy />
+
+  <!-- https://svelte.dev/docs/svelte/key -->
+  <div class={`inset-0 absolute ${channelWithNoVideos || showTuningOverlay ? 'bg-black' : 'opacity-0'} transition-opacity duration-200 select-none`}>
+    {#if channelWithNoVideos}
+      <StandBy status='NO_VIDEOS' />
     {:else if showTuningOverlay}
       <Noise />
     {/if}
-  </div> -->
+  </div>
   <div class='absolute inset-0 flex justify-center items-center pointer-events-none'>
     <Osd
       bind:this={osd}
@@ -184,7 +215,7 @@
       channelId={currentChannelIndex + 1}
     />
   </div>
-  <div class='bottom-1/2 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
+  <div class='bottom-1/2 z-10 flex rounded-lg m-4 bg-neutral-900/80 backdrop-blur flex-col justify-end right-0 translate-y-1/2 absolute *:text-white gap-4 text-center p-4'>
     <!-- <p>state: {playerState}</p>
     <p>{currentChannel.name} ({currentChannel.videos.length})</p>
     <p>#{currentVideo ? currentChannel.videos.indexOf(currentVideo) : null} {currentVideo?.id}</p>
@@ -193,7 +224,16 @@
     <hr class='my-8'> -->
     {#if debugPlayback}
       <div class='text-white text-xs'>
-        <div class='select-all'>{currentVideo?.id}</div>
+        <div class='select-all'>channelIndex: {currentChannelIndex}</div>
+        <div class='select-all w-60'>channel videos:
+          {#each currentChannel.videos as video}
+            <span>{video.id}&MediumSpace;</span>
+          {/each}
+        </div>
+        <div class='select-all'>video.id: {currentVideo?.id}</div>
+        <div class='select-all'>videoIndex: {currentVideoIndex}</div>
+        <div class='select-all'>isPlayerReady: {isPlayerReady}</div>
+        <div class='select-all'>isPlaying: {isPlaying}</div>
         <div class='select-all'>{currentVideo?.start} - {currentVideo?.end} ({currentVideo && currentVideo?.end - currentVideo?.start}s)</div>
         <div class='select-all'>{currentTime?.toFixed()}</div>
       </div>
@@ -212,8 +252,8 @@
     <div>
       <div class='text-xs mb-1'>CH</div>
       <div class='space-y-1'>
-        <Control {isPlayerReady} controlName='next-channel' handler={() => { setChannelByOffset(1) }}>➕</Control>
-        <Control {isPlayerReady} controlName='prev-channel' handler={() => { setChannelByOffset(-1) }}>➖</Control>
+        <Control {isPlayerReady} controlName='next-channel' handler={() => { goToNextChannel() }}>➕</Control>
+        <Control {isPlayerReady} controlName='prev-channel' handler={() => { goToPrevChannel() }}>➖</Control>
       </div>
     </div>
   </div>

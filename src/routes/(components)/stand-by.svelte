@@ -1,3 +1,19 @@
+<script lang='ts'>
+
+  const statusMessages = {
+    VIDEO_UNAVAILABLE: 'The current video is not available',
+    NO_VIDEOS: 'Sorry, this channel doesn\'t have any videos yet',
+  }
+
+  interface Props {
+    status: keyof typeof statusMessages | undefined
+  }
+
+  let { status = $bindable() }: Props = $props()
+
+  const statusMessage = $derived(status && statusMessages[status])
+</script>
+
 <svelte:head>
   <link href='https://fonts.cdnfonts.com/css/vcr-osd-mono' rel='stylesheet'>
 </svelte:head>
@@ -24,8 +40,8 @@
     </svg>
     <div class='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
       <div class="bg-black text-center text-white font-['VCR_OSD_Mono'] py-2 whitespace-nowrap">
-        <div class='mx-[1ch] text-[8cqh]'>WE'LL BE RIGHT BACK</div>
-        <div class='text-[2cqh] opacity-50'>THE CURRENT VIDEO IS NOT AVAILABLE</div>
+        <div class='mx-[1ch] text-[8cqh] uppercase'>WE'LL BE RIGHT BACK</div>
+        <div class='text-[2cqh] opacity-50 uppercase'>{statusMessage}</div>
       </div>
     </div>
   </div>
